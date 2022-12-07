@@ -7,6 +7,7 @@ import urllib.request
 import time
 import psutil
 
+# Game running 2
 
 # hyperparameters
 H = 400 # number of hidden layer neurons
