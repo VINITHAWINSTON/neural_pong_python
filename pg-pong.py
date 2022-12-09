@@ -1,10 +1,16 @@
 """ Trains an agent with (stochastic) Policy Gradients on Pong. Uses OpenAI Gym. """
 import numpy as np
-import pickle
+import pickle as cPickle
+import sys
 import gym
+import urllib.request
+import time
+import psutil
+
+# Game running 3
 
 # hyperparameters
-H = 200 # number of hidden layer neurons
+H = 600 # number of hidden layer neurons
 batch_size = 10 # every how many episodes to do a param update?
 learning_rate = 1e-4
 gamma = 0.99 # discount factor for reward
@@ -15,16 +21,16 @@ render = False
 # model initialization
 D = 80 * 80 # input dimensionality: 80x80 grid
 if resume:
-  model = pickle.load(open('save.p', 'rb'))
+  model = cPickle.load(open('save.p', 'rb'))
 else:
   model = {}
   model['W1'] = np.random.randn(H,D) / np.sqrt(D) # "Xavier" initialization
   model['W2'] = np.random.randn(H) / np.sqrt(H)
-  
+
 grad_buffer = { k : np.zeros_like(v) for k,v in model.items() } # update buffers that add up gradients over a batch
 rmsprop_cache = { k : np.zeros_like(v) for k,v in model.items() } # rmsprop memory
 
-def sigmoid(x): 
+def sigmoid(x):
   return 1.0 / (1.0 + np.exp(-x)) # sigmoid "squashing" function to interval [0,1]
 
 def prepro(I):
@@ -61,15 +67,17 @@ def policy_backward(eph, epdlogp):
   dW1 = np.dot(dh.T, epx)
   return {'W1':dW1, 'W2':dW2}
 
-env = gym.make("Pong-v0")
+env = gym.make("Pong-v4")
 observation = env.reset()
 prev_x = None # used in computing the difference frame
 xs,hs,dlogps,drs = [],[],[],[]
 running_reward = None
 reward_sum = 0
 episode_number = 0
+#Start the timer
+start = time.time()
 while True:
-  if render: env.render()
+  if render: env.render(mode='rgb_array')
 
   # preprocess the observation, set input to network to be difference image
   cur_x = prepro(observation)
@@ -122,12 +130,25 @@ while True:
 
     # boring book-keeping
     running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
+    # 20% of 21 (16.8)
+    if running_reward > -16.8:
+      end = time.time()
+      SecToConvert = end - start
+      MinutesGet, SecondsGet = divmod(SecToConvert, 60)
+      HoursGet, MinutesGet = divmod(MinutesGet,60)
+      print("Total hours: ", HoursGet)
+      print("Total minutes: ", MinutesGet)
+      print("Total second: ", SecondsGet)
+      print("RAM memory used(%)",psutil.virtual_memory()[2])
+      sys.exit(('Crash for number of neurons: %d' % (H)))
+
+
+
     print('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
-    if episode_number % 100 == 0: pickle.dump(model, open('save.p', 'wb'))
+    if episode_number % 100 == 0: cPickle.dump(model, open('save.p', 'wb'))
     reward_sum = 0
     observation = env.reset() # reset env
     prev_x = None
 
   if reward != 0: # Pong has either +1 or -1 reward exactly when game ends.
-    print('ep %d: game finished, reward: %f' % (episode_number, reward)) 
-    print('' if reward == -1 else ' !!!!!!!!')
+    print (('ep %d: game finished, reward: %f' % (episode_number, reward)) + ('' if reward == -1 else ' !!!!!!!!'))
